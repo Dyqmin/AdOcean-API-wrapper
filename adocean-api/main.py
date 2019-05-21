@@ -54,13 +54,6 @@ class AdOcean:
         response = requests.get(url)
         return response
 
-    def _pre(self, )
-
-c = AdOcean("MEC_ddonoch", "W777c444!@#")
-
-print(c.sessionID)
-print(c.get('GetCampaignsList').json())
-
 
 """
 
