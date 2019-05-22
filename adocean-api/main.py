@@ -1,66 +1,58 @@
 import requests
-import xml.etree.ElementTree as ET
 import json
+import os
+
 
 class AdOcean:
-    def __init__(self, login, password):
+    def __init__(self, login, password, sesion_id=None):
         self.login = login
         self.password = password
-        self.base_url = 'https://api.adocean.pl/json'
+        self.base_url = 'https://api.adocean.pl/json/'
         self.session = requests.session()
-        self.payload = {
-            'login': self.login,
-            'passwd': self.password
-        }
-        self.sessionID = self.open_session(self.payload)
+        self._sesion_id = sesion_id
 
-        if self.sessionID is None:
-            raise ValueError('Wrong login or password.')
+    @property
+    def session_id(self):
+        """
+        We are using textfile to hold sessionID.
+        It helps us avoiding opening a new session every time.
+        """
+        session_file = 'sessionid.txt'
 
-    @staticmethod
-    def open_session(data):
-        try:
-            r = requests.post('https://api.adocean.pl/xml/OpenSession.php', data=data)
-            root = ET.fromstring(r.text)
-            if root[0].text == 'OK':
-                api_key = root[1].text
-                return api_key
-        except Exception as e:
-            return 'Got error: {}'.format(e)
+        mode = "r+" if os.path.isfile(session_file) else "w+"
 
-    # Shows advertiser's name based on provided campaign
-    def show_advertiser(self, campaign_id):
-        r = requests.get(
-            'https://api.adocean.pl/xml/GetCampaignInfo.php?sessionID={}&campaignID={}'.format(self.api_key,
-                                                                                                campaign_id))
-        root = ET.fromstring(r.text)
-        return root.find('advertiserName').text
+        with open('sessionid.txt', mode=mode, encoding='utf-8') as f:
+            f.seek(0)
+            sesion_id = f.read()
+            print(sesion_id)
+            if sesion_id == "":
+                sesion_id = self.open_session()
+                f.write(sesion_id)
+        return sesion_id
 
-    # Returns a list of all campaigns
-    def get_campaigns_list(self, advertiser_name):
-        r = requests.get('https://api.adocean.pl/xml/GetCampaignsList.php?sessionID={}'.format(self.api_key))
-        root = ET.fromstring(r.text)
-        ids_root = root.find('campaigns')
-        ids = []
-        for campaign in ids_root.findall('campaign'):
-            cmp_id = campaign.find('id').text
-            adv_name = self.show_advertiser(cmp_id)
-            if adv_name == advertiser_name:
-                ids.append(adv_name)
-        return ids
+    def validate_session(func):
+        def session_wrapper(*args, **kwargs):
+            response = func(*args, **kwargs)
+            if response['OpenSession']['status'] != 'OK':
+                raise Exception(response)
+            else:
+                return response['OpenSession']['sessionID']
+        return session_wrapper
 
-    def get(self, source):
-        url = '{base_url}/{source}.php?sessionID={sessionID}'.format(base_url=self.base_url,source=source,sessionID=self.sessionID)
-        response = requests.get(url)
-        return response
+    @validate_session
+    def open_session(self):
+        login_url = f'{self.base_url}OpenSession.php'
+        login_request = self.session.post(
+            login_url, data={'login': self.login, 'passwd': self.password})
+        session_response = json.loads(login_request.text)
+        return session_response
 
+    def get(self, path, params=None):
+        return self._build('GET', path, params=params)
 
-"""
+    def post(self, path, payload=None):
+        return self._build('POST', path, payload)
 
-<?xml version="1.0"?><OpenSession>
-<status>OK</status>
-<sessionID>y636319a686727c5</sessionID>
-</OpenSession>
-
-"""
-
+    # TODO decorator error handling
+    def _build(self, method, path, payload=None, params=None):
+        pass
