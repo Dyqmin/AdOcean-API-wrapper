@@ -7,7 +7,8 @@ class AdOcean:
     def __init__(self, login, password, sesion_id=None):
         self.login = login
         self.password = password
-        self.base_url = 'https://api.adocean.pl/json/'
+        self.login_payload = {'login': self.login, 'passwd': self.password}
+        self.base_url = 'https://api.adocean.pl/json'
         self.session = requests.session()
         self._sesion_id = sesion_id
 
@@ -28,7 +29,7 @@ class AdOcean:
             if sesion_id == "":
                 sesion_id = self.open_session()
                 f.write(sesion_id)
-        return sesion_id
+        return {'sessionID': sesion_id}
 
     def validate_session(func):
         def session_wrapper(*args, **kwargs):
@@ -41,13 +42,16 @@ class AdOcean:
 
     @validate_session
     def open_session(self):
-        login_url = f'{self.base_url}OpenSession.php'
+        login_url = f'{self.base_url}/OpenSession.php'
         login_request = self.session.post(
-            login_url, data={'login': self.login, 'passwd': self.password})
+            login_url, data=self.login_payload)
+
+        print(login_request)
         session_response = json.loads(login_request.text)
         return session_response
 
     def get(self, path, params=None):
+        print(params)
         return self._build('GET', path, params=params)
 
     def post(self, path, payload=None):
@@ -55,4 +59,13 @@ class AdOcean:
 
     # TODO decorator error handling
     def _build(self, method, path, payload=None, params=None):
-        pass
+        if params is None:
+            params = self.session_id
+        else:
+            params.update(self.session_id)
+            
+        url = '{}/{}.php'.format(
+            self.base_url, path)
+        response = self.session.request(method, url, json=payload, params=params)
+        print(response.url)
+        return response
